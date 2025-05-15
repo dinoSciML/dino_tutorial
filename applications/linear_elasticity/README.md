@@ -5,7 +5,9 @@
 E.g., using `conda`
 
 ```
-conda create -n torchfem -c conda-forge fenics==2019.1.0 matplotlib scipy jupyter torch
+conda create -n torchfem -c conda-forge fenics==2019.1.0 matplotlib scipy jupyter 
+pip install torch
+pip install tqdm
 ```
 
 Use `pip` to install additional missing packages as needed
