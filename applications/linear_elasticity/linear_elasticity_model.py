@@ -54,36 +54,48 @@ def LinearElasticityPrior(Vh_PARAMETER, pointwise_std, correlation_length, mean=
         return hp.BiLaplacianPrior(Vh_PARAMETER, gamma, delta, anis_diff, mean=mean, robin_bc=True)
 
 class linear_elasticity_varf:
-	def __init__(self,Vh,my_ds,traction,body_force=None,mean = None):
-		self.Vh = Vh
-		self.my_ds = my_ds
-		self.traction = traction
-		if body_force is None:
-			self.body_force = dl.Constant((0.0,0.0))
-		else:
-			self.body_force = body_force
+    def __init__(self,Vh,my_ds,traction,body_force=None,mean = None, is_fwd_linear=False):
+        self.Vh = Vh
+        self.my_ds = my_ds
+        self.traction = traction
+        self.linear = is_fwd_linear
+        if body_force is None:
+            self.body_force = dl.Constant((0.0,0.0))
+        else:
+            self.body_force = body_force
 
-		if mean is None:
-			self._mean_function = dl.Constant(0.0)
-		else:
-			self.mean_function = dl.Constant(mean)
+        if mean is None:
+            self._mean_function = dl.Constant(0.0)
+        else:
+            self.mean_function = dl.Constant(mean)
 
-	def __call__(self,u,m,p):
-		
-		# Lame parameters
-		E = dl.exp(m) + dl.Constant(1.0)
-		nu = 0.4
-		mu = E/(2.0*(1.0 + nu))
-		lmbda = (E*nu)/((1.0+nu)*(1.0 - 2.0*nu))
+    def __call__(self,u,m,p):
+        
+        # Lame parameters
+        E = dl.exp(m) + dl.Constant(1.0)
+        nu = 0.4
+        mu = E/(2.0*(1.0 + nu))
+        lmbda = (E*nu)/((1.0+nu)*(1.0 - 2.0*nu))
 
-		d = u.geometric_dimension()
+        d = u.geometric_dimension()
 
-		eps = dl.sym(dl.grad(u))
-		sigma = lmbda * lmbda*dl.tr(eps)*dl.Identity(d) + 2.0*mu*eps
-		# Total potential energy:
-		Pi = dl.inner(sigma, eps)*dl.dx + dl.dot(self.body_force,u)*dl.dx + dl.dot(self.traction,u)*self.my_ds(1)
+        eps = dl.sym(dl.grad(u))
 
-		return dl.derivative(Pi,u,p)
+        # Total potential energy:
+        # Pi = dl.inner(sigma, eps)*dl.dx + dl.dot(self.body_force,u)*dl.dx + dl.dot(self.traction,u)*self.my_ds(1)
+        if self.linear:
+            eps_test = dl.sym(dl.grad(p))
+            sigma =  lmbda*dl.tr(eps)*dl.Identity(d) + 2.0*mu*eps
+            res_form = dl.inner(sigma, eps_test)*dl.dx \
+                        + dl.dot(self.body_force, p)*dl.dx \
+                        + dl.dot(self.traction,p)*self.my_ds(1)
+            return res_form		
+        else:
+            eps = dl.sym(dl.grad(u))
+            sigma = lmbda*dl.tr(eps)*dl.Identity(d) + 2.0*mu*eps
+            # Total potential energy:
+            Pi = dl.inner(sigma, eps)*dl.dx + dl.dot(self.body_force,u)*dl.dx + dl.dot(self.traction,u)*self.my_ds(1)
+            return dl.derivative(Pi,u,p)
 	
 def linear_elasticity_model(settings):
     # Set up the mesh, finite element spaces, and PDE forward problem
@@ -131,11 +143,11 @@ def linear_elasticity_model(settings):
                                                  a=0.06, b=4, c=0.03, d=10, degree=5)
     right_t = dl.interpolate(right_traction_expr,Vh[hp.STATE])
 
-    pde_varf = linear_elasticity_varf(Vh,my_ds,right_t)
+    pde_varf = linear_elasticity_varf(Vh,my_ds,right_t, is_fwd_linear=True)
 
-    # pde = hp.PDEVariationalProblem(Vh, pde_varf, bc, bc0, is_fwd_linear=True)
+    pde = hp.PDEVariationalProblem(Vh, pde_varf, bc, bc0, is_fwd_linear=True)
     # pde = hp.PDEVariationalProblem(Vh, pde_varf, bc, bc0, is_fwd_linear=False)
-    pde = hp.PDEVariationalProblem(Vh, pde_varf, bc, bc0)
+    # pde = hp.PDEVariationalProblem(Vh, pde_varf, bc, bc0)
 
     # Set up the prior
 
